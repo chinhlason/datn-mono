@@ -77,6 +77,10 @@ func (u *UserController) Logout(c echo.Context) error {
 	return c.JSON(http.StatusOK, "log out success")
 }
 
+func (u *UserController) Test(c echo.Context) error {
+	return c.JSON(http.StatusOK, "Test")
+}
+
 func (u *UserController) RefreshToken(c echo.Context) error {
 	newAccessToken, err := u.Queries.RefreshToken(c)
 	if err != nil {
