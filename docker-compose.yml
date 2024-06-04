@@ -1,0 +1,23 @@
+services:
+  scylladb:
+    image: scylladb/scylla
+    container_name: scylladb-mono
+    healthcheck:
+      test: ["CMD", "cqlsh", "-e", "SHOW VERSION"]
+      interval: 5s
+      retries: 10
+      start_period: 20s
+      timeout: 30s
+    ports:
+      - 9042:9042
+    volumes:
+      - scylladata:/var/lib/scylla
+    networks:
+      - hospitalsvc
+
+networks:
+  hospitalsvc:
+    driver: bridge
+
+volumes:
+  scylladata:
