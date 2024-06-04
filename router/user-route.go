@@ -27,6 +27,7 @@ func UserRoute(e *echo.Echo, q *execute.Queries) {
 	e.POST("/login", controller.Login)
 	e.POST("/log-out", controller.Logout)
 	e.GET("/test", controller.Test)
+
 	c.POST("/refresh-token", controller.RefreshToken)
 	c.GET("/get-all-doctors", controller.GetAllUsers, middleware.IsADMIN)
 	c.PUT("/update", controller.UpdateProfile)
