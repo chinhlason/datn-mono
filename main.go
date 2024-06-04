@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	scyllaHost := flag.String("scyllaHost", "localhost:9042", "Scylla listen address")
+	scyllaHost := flag.String("scyllaHost", "scylladb:9042", "Scylla listen address")
 	scyllaKS := flag.String("scyllaDB", "scylladb", "Scylla keyspace name")
 
 	e := echo.New()

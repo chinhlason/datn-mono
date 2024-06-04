@@ -14,7 +14,20 @@ services:
       - scylladata:/var/lib/scylla
     networks:
       - hospitalsvc
-
+  mainsvc:
+    container_name: mainsvc
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    environment:
+      dbURL: scylladb:9042
+    depends_on:
+      scylladb:
+        condition: service_healthy
+    ports:
+      - 8081:8081
+    networks:
+      - hospitalsvc
 networks:
   hospitalsvc:
     driver: bridge
