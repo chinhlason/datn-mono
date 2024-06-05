@@ -18,7 +18,7 @@ func UserRoute(e *echo.Echo, q *execute.Queries) {
 	}
 
 	c := e.Group("/user")
-	c.Use(middleware.SetJWTHeader)
+	//c.Use(middleware.SetJWTHeader)
 	c.Use(middleware.JWTMiddleware())
 	c.Use(middleware.ValidateAndExtractClaims)
 

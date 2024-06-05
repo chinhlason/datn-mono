@@ -15,7 +15,7 @@ func DeviceRoute(e *echo.Echo, q *execute.Queries, client mqtt.Client) {
 	}
 
 	c := e.Group("/device")
-	c.Use(middleware.SetJWTHeader)
+	//c.Use(middleware.SetJWTHeader)
 	c.Use(middleware.JWTMiddleware())
 	c.Use(middleware.ValidateAndExtractClaims)
 

@@ -12,7 +12,7 @@ func BedRoute(e *echo.Echo, q *execute.Queries) {
 		Queries: q,
 	}
 	c := e.Group("/bed")
-	c.Use(middleware.SetJWTHeader)
+	//c.Use(middleware.SetJWTHeader)
 	c.Use(middleware.JWTMiddleware())
 	c.Use(middleware.ValidateAndExtractClaims)
 

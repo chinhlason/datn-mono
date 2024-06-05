@@ -10,7 +10,6 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/labstack/echo/v4"
 	"net/http"
-	"time"
 )
 
 type DeviceController struct {
@@ -30,7 +29,7 @@ func (d *DeviceController) AddDevices(c echo.Context) error {
 			return c.JSON(http.StatusBadRequest, err.Error())
 		}
 		if len(device) > 0 {
-			return c.JSON(http.StatusOK, res.Response{
+			return c.JSON(http.StatusBadRequest, res.Response{
 				Message: "Cannot add devices",
 				Data:    device,
 			})
@@ -43,7 +42,7 @@ func (d *DeviceController) AddDevices(c echo.Context) error {
 		}
 	}
 	if len(bugs) > 0 {
-		return c.JSON(http.StatusOK, res.Response{
+		return c.JSON(http.StatusBadRequest, res.Response{
 			Message: "Cannot add devices",
 			Data:    bugs,
 		})
@@ -143,7 +142,7 @@ func (d *DeviceController) GetInUse(c echo.Context) error {
 }
 
 type Shutdown struct {
-	NewStatus int `json:"new_status"`
+	NewStatus int8 `json:"new_status"`
 }
 
 type Message struct {
@@ -152,27 +151,31 @@ type Message struct {
 }
 
 func publish(client mqtt.Client, msg Message, topic string) {
-	// Chuyển cấu trúc dữ liệu thành chuỗi JSON
 	jsonData, err := json.Marshal(msg)
 	fmt.Println(jsonData)
 	if err != nil {
 		fmt.Printf("JSON marshaling failed: %s\n", err)
 	}
-
-	// Xuất bản chuỗi JSON lên chủ đề
 	token := client.Publish(topic, 0, false, jsonData)
 	token.Wait()
-	time.Sleep(15 * time.Second)
 }
 
 func (d *DeviceController) OnOffDevice(c echo.Context) error {
-	//control := c.QueryParam("controll")
+	control := c.QueryParam("control")
+	fmt.Println(control)
+	fmt.Println(control == "on")
+	var controlInt int8
+	if control == "on" {
+		controlInt = 0
+	} else {
+		controlInt = 1
+	}
 	device := c.QueryParam("device")
 	topic := fmt.Sprintf("ibme/device/shutdown/update/%s", device)
 	msg := Message{
-		Id: "D001",
+		Id: device,
 		Shutdown: Shutdown{
-			NewStatus: 1,
+			NewStatus: controlInt,
 		},
 	}
 	publish(d.Mqtt, msg, topic)

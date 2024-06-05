@@ -16,7 +16,11 @@ type UserController struct {
 }
 
 func (u *UserController) CreateAdminAccount() error {
-	err := u.Queries.CreateAdminAccount()
+	user, err := u.Queries.GetUserByOption("Admin", "doctor_code")
+	if len(user) > 0 {
+		return nil
+	}
+	err = u.Queries.CreateAdminAccount()
 	if err != nil {
 		return err
 	}
