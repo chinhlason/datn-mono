@@ -118,16 +118,6 @@ func (q *Queries) Validate(req user_req.LoginReq, c echo.Context) (model.Users, 
 	if !isValid {
 		return model.Users{}, errors.New("Username or Password is incorrect!")
 	}
-	accessToken, err := security.GenToken(users[0].Id.String(), users[0].Role, time.Hour)
-	if err != nil {
-		return model.Users{}, errors.New("Gen Access Token Fail, Try again")
-	}
-	refreshToken, err := security.GenToken(users[0].Id.String(), users[0].Role, time.Hour*24*7)
-	if err != nil {
-		return model.Users{}, errors.New("Gen Refresh Token Fail, Try again")
-	}
-	helper.CreateCookie(c, "jwt", accessToken, 3600*7*24)
-	helper.CreateCookie(c, "refresh-token", refreshToken, 3600*7*24)
 	return users[0], nil
 }
 

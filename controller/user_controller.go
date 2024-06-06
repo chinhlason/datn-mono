@@ -5,6 +5,8 @@ import (
 	"HospitalManager/db/scylla/scylladb/execute"
 	"HospitalManager/dto/req/user_req"
 	"HospitalManager/dto/res"
+	"HospitalManager/security"
+	"errors"
 	"fmt"
 	"github.com/labstack/echo/v4"
 	"net/http"
@@ -70,7 +72,19 @@ func (u *UserController) Login(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, err.Error())
 	}
-	return c.JSON(http.StatusOK, user)
+	accessToken, err := security.GenToken(user.Id.String(), user.Role, time.Hour)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errors.New("access token gen fail"))
+	}
+	refreshToken, err := security.GenToken(user.Id.String(), user.Role, time.Hour*24*7)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errors.New("refresh token gen fail"))
+	}
+	return c.JSON(http.StatusOK, res.LoginRes{
+		User:         user,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	})
 }
 
 func (u *UserController) Logout(c echo.Context) error {
