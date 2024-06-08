@@ -94,3 +94,37 @@ func (rc *RecordController) SearchTotalRecord(c echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, records)
 }
+
+func (rc *RecordController) SearchPendingRecord(c echo.Context) error {
+	search := c.QueryParam("q")
+	records, err := rc.Queries.SearchPendingRecord(search, c)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, err.Error())
+	}
+	return c.JSON(http.StatusOK, records)
+}
+
+func (rc *RecordController) Statistical(c echo.Context) error {
+	satisrical, err := rc.Queries.StatisticalNumber(c)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, err.Error())
+	}
+	return c.JSON(http.StatusOK, satisrical)
+}
+
+func (rc *RecordController) GetTotalByAdmin(c echo.Context) error {
+	records, err := rc.Queries.GetAllPatientByAdmin(c)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, err.Error())
+	}
+	return c.JSON(http.StatusOK, records)
+}
+
+func (rc *RecordController) SearchTotalByAdmin(c echo.Context) error {
+	search := c.QueryParam("q")
+	records, err := rc.Queries.SearchRecordByAdmin(search, c)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, err.Error())
+	}
+	return c.JSON(http.StatusOK, records)
+}

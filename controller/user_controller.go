@@ -6,8 +6,10 @@ import (
 	"HospitalManager/dto/req/user_req"
 	"HospitalManager/dto/res"
 	"HospitalManager/security"
+	"HospitalManager/sendmail"
 	"errors"
 	"fmt"
+	"github.com/golang-jwt/jwt"
 	"github.com/labstack/echo/v4"
 	"net/http"
 	"time"
@@ -100,7 +102,18 @@ func (u *UserController) Test(c echo.Context) error {
 }
 
 func (u *UserController) RefreshToken(c echo.Context) error {
-	newAccessToken, err := u.Queries.RefreshToken(c)
+	token := c.QueryParam("refresh-token")
+	refreshToken, err := security.ValidateToken(token)
+	if err != nil {
+		return err
+	}
+	if !refreshToken.Valid {
+		return c.JSON(http.StatusUnauthorized, errors.New("token invalid"))
+	}
+	claims := refreshToken.Claims.(jwt.MapClaims)
+	userid := claims["userid"].(string)
+	role := claims["role"].(string)
+	newAccessToken, err := security.GenToken(userid, role, time.Hour)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, err.Error())
 	}
@@ -116,6 +129,15 @@ func (u *UserController) GetAllUsers(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, err.Error())
 	}
 	return c.JSON(http.StatusOK, users)
+}
+
+func (u *UserController) GetUerById(c echo.Context) error {
+	id := c.QueryParam("id")
+	user, err := u.Queries.GetUserByOption(id, "id")
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, err.Error())
+	}
+	return c.JSON(http.StatusOK, user[0])
 }
 
 func (u *UserController) UpdateProfile(c echo.Context) error {
@@ -156,7 +178,7 @@ func (u *UserController) GetProfileCurrent(c echo.Context) error {
 	return c.JSON(http.StatusOK, user)
 }
 
-func (u *UserController) ChangePassword(c echo.Context) error {
+func (u *UserController) ChangePasswordUser(c echo.Context) error {
 	req := user_req.ChangePswReq{}
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, err.Error())
@@ -166,4 +188,70 @@ func (u *UserController) ChangePassword(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, err.Error())
 	}
 	return c.JSON(http.StatusOK, "change password success")
+}
+
+func (u *UserController) SendMail(c echo.Context) error {
+	email := c.QueryParam("email")
+	user, err := u.Queries.GetUserByOption(email, "email")
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, err.Error())
+	}
+	token, err := security.GenToken(user[0].Id.String(), user[0].Role, time.Hour)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, err.Error())
+	}
+	err = sendmail.SendMail(email, token, "./sendmail/format.html")
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, err.Error())
+	}
+	tokenFound, err := u.Queries.GetResetToken("id_doctor", user[0].Id.String())
+	if err != nil {
+		err = u.Queries.InsertResetToken(user[0].Id.String(), token)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, err.Error())
+		}
+	} else {
+		err = u.Queries.UpdateToken(tokenFound.Id.String(), token)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, err.Error())
+		}
+	}
+	return c.JSON(http.StatusOK, "send successfully")
+}
+
+func (u *UserController) VerifyToken(c echo.Context) error {
+	token := c.QueryParam("token")
+	tokenFound, err := u.Queries.GetResetToken("value", token)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, err.Error())
+	}
+	if token != tokenFound.Value {
+		return c.JSON(http.StatusBadRequest, "token is invalid or expired")
+	}
+
+	return c.JSON(http.StatusOK, "success")
+}
+
+func (u *UserController) ResetPsw(c echo.Context) error {
+	token := c.QueryParam("token")
+	newPsw := c.QueryParam("psw")
+	tokenFound, err := u.Queries.GetResetToken("value", token)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, err.Error())
+	}
+	if token != tokenFound.Value {
+		return c.JSON(http.StatusBadRequest, "token is invalid or expired")
+	}
+
+	err = u.Queries.ResetPassword(token, newPsw)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, err.Error())
+	}
+
+	err = u.Queries.DeleteToken(tokenFound.Id.String())
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, err.Error())
+	}
+
+	return c.JSON(http.StatusOK, "reset password successfully")
 }

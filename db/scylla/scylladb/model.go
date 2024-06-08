@@ -20,6 +20,11 @@ type ChangePsw struct {
 	Id       string
 }
 
+type UpdateToken struct {
+	Value string
+	Id    string
+}
+
 type UpdateRoomReq struct {
 	Name          string
 	BedNumber     int

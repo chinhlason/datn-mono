@@ -40,9 +40,9 @@ func Connect() mqtt.Client {
 	return client
 }
 
-func sub(client mqtt.Client) {
-	topic := "ibme/device/data/D001"
-	token := client.Subscribe(topic, 1, nil)
-	token.Wait()
-	fmt.Println("Subscribed to LWT", topic)
-}
+//func sub(client mqtt.Client) {
+//	topic := "ibme/device/data/D001"
+//	token := client.Subscribe(topic, 1, nil)
+//	token.Wait()
+//	fmt.Println("Subscribed to LWT", topic)
+//}

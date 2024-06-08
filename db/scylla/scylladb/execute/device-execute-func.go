@@ -404,15 +404,116 @@ func (q *Queries) GetInUseDevice(c echo.Context) ([]res.DeviceInUse, error) {
 	_, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	var result []res.DeviceInUse
+	var records []model.MedicalRecords
+	//doctor, err := q.GetProfileCurrent(c)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//records, err := q.GetRecordByOption(doctor.Id.String(), "id_doctor")
+	//if err != nil {
+	//	return nil, err
+	//}
 
-	doctor, err := q.GetProfileCurrent(c)
-	if err != nil {
-		return nil, err
+	rooms, _ := q.SelectAllRoomByCurrDoctor(c)
+	for _, room := range rooms {
+		record, err := q.GetRecordByOption(room.Id.String(), "id_room")
+		if err != nil {
+			return nil, err
+		}
+		if len(record) > 0 {
+			for _, temp := range record {
+				records = append(records, temp)
+			}
+		}
 	}
-	records, err := q.GetRecordByOption(doctor.Id.String(), "id_doctor")
-	if err != nil {
-		return nil, err
+
+	type DeviceInUseResult struct {
+		deviceInUse res.DeviceInUse
+		err         error
 	}
+
+	resultChan := make(chan DeviceInUseResult, len(records))
+	var wg sync.WaitGroup
+
+	for _, record := range records {
+		if record.Status == "TREATING" {
+			wg.Add(1)
+			go func(record model.MedicalRecords) {
+				defer wg.Done()
+				usageDevices, err := q.GetUsageDeviceByOption(record.Id.String(), "id_record")
+				if err != nil {
+					resultChan <- DeviceInUseResult{err: err}
+					return
+				}
+				for _, usageDevice := range usageDevices {
+					if usageDevice.Status == "IN_USE" {
+						device, err := q.GetDeviceByOption(usageDevice.IdDevice.String(), "id")
+						if err != nil {
+							resultChan <- DeviceInUseResult{err: err}
+							return
+						}
+						usageBed, err := q.GetUsageBedByOption(record.Id.String(), "id_record")
+						if err != nil {
+							resultChan <- DeviceInUseResult{err: err}
+							return
+						}
+						if len(usageBed) == 0 {
+							resultChan <- DeviceInUseResult{err: errors.New("No usage beds data found")}
+							return
+						}
+						for _, temp := range usageBed {
+							if temp.Status == "IN_USE" {
+								bed, _ := q.GetBedById(temp.IdBed.String())
+								room, _ := q.GetRoomByOption(bed.IdRoom.String(), "id")
+								res := res.DeviceInUse{
+									Device:   device[0],
+									IdRecord: record.Id.String(),
+									Room:     room[0].Name,
+									Bed:      bed.Name,
+									InUseAt:  usageDevice.CreateAt,
+								}
+								resultChan <- DeviceInUseResult{deviceInUse: res}
+							}
+						}
+					}
+				}
+			}(record)
+		}
+	}
+
+	go func() {
+		wg.Wait()
+		close(resultChan)
+	}()
+
+	for res := range resultChan {
+		if res.err != nil {
+			return nil, res.err
+		}
+		result = append(result, res.deviceInUse)
+	}
+
+	if len(result) == 0 {
+		return nil, errors.New("No data found")
+	}
+	return result, nil
+}
+
+func (q *Queries) GetInUseDeviceAdmin(c echo.Context) ([]res.DeviceInUse, error) {
+	_, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	var result []res.DeviceInUse
+	var records []model.MedicalRecords
+	//doctor, err := q.GetProfileCurrent(c)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//records, err := q.GetRecordByOption(doctor.Id.String(), "id_doctor")
+	//if err != nil {
+	//	return nil, err
+	//}
+
+	records, _ = q.getAllRecord()
 
 	type DeviceInUseResult struct {
 		deviceInUse res.DeviceInUse

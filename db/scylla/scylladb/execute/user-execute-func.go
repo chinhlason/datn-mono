@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gocql/gocql"
+	"github.com/golang-jwt/jwt"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/scylladb/gocqlx/v2/qb"
@@ -161,8 +162,8 @@ func (q *Queries) UpdateProfile(req *scylladb.UpdateProfileReq, c echo.Context) 
 	tableName := fmt.Sprintf("%s.doctors", q.keyspace)
 	Userid := c.Get("Userid")
 	user, _ := q.GetUserByOption(req.Email, "email")
-	if len(user) > 0 && user[0].Id != Userid {
-		return errors.New("email duplicate")
+	if len(user) > 0 && user[0].Id.String() != Userid {
+		return errors.New("email duplicate 2")
 	}
 	stmt, names := qb.Update(tableName).
 		Set("fullname").
@@ -269,6 +270,110 @@ func (q *Queries) ChangePassword(req user_req.ChangePswReq, c echo.Context) erro
 	update := scylladb.ChangePsw{
 		Password: password,
 		Id:       idStr,
+	}
+	stmt, names := qb.Update(tableName).
+		Set("password").
+		Where(qb.Eq("id")).
+		ToCql()
+	query := q.session.Query(stmt, names).BindStruct(update)
+	if err := query.ExecRelease(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (q *Queries) InsertResetToken(idDoctor, value string) error {
+	_, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	tableName := fmt.Sprintf("%s.reset_token", q.keyspace)
+	id, err := gocql.ParseUUID(uuid.New().String())
+	if err != nil {
+		panic(err)
+	}
+	insert := &model.ResetToken{
+		Id:       id,
+		IdDoctor: idDoctor,
+		Value:    value,
+	}
+	stmt := qb.Insert(tableName).
+		Columns("id", "id_doctor", "value").
+		Query(q.session)
+	stmt.BindStruct(insert)
+	if err := stmt.ExecRelease(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (q *Queries) GetResetToken(option string, value string) (model.ResetToken, error) {
+	_, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	var token model.ResetToken
+	tableName := fmt.Sprintf("%s.reset_token", q.keyspace)
+	stmt, names := qb.Select(tableName).
+		Where(qb.Eq(option)).
+		AllowFiltering().
+		ToCql()
+	query := q.session.Query(stmt, names).BindMap(qb.M{
+		option: value,
+	})
+	if err := query.GetRelease(&token); err != nil {
+		return model.ResetToken{}, err
+	}
+	return token, nil
+}
+
+func (q *Queries) UpdateToken(id, value string) error {
+	_, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	tableName := fmt.Sprintf("%s.reset_token", q.keyspace)
+	update := scylladb.UpdateToken{
+		Value: value,
+		Id:    id,
+	}
+	stmt, names := qb.Update(tableName).
+		Set("value").
+		Where(qb.Eq("id")).
+		ToCql()
+	query := q.session.Query(stmt, names).BindStruct(update)
+	if err := query.ExecRelease(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (q *Queries) DeleteToken(id string) error {
+	_, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	tableName := fmt.Sprintf("%s.reset_token", q.keyspace)
+	delete := scylladb.UpdateToken{
+		Id: id,
+	}
+	stmt, names := qb.Delete(tableName).
+		Where(qb.Eq("id")).
+		ToCql()
+	query := q.session.Query(stmt, names).BindStruct(delete)
+	if err := query.ExecRelease(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (q *Queries) ResetPassword(token, newPassword string) error {
+	tableName := fmt.Sprintf("%s.doctors", q.keyspace)
+	resetToken, err := security.ValidateToken(token)
+	if err != nil {
+		return err
+	}
+	if !resetToken.Valid {
+		return errors.New("token not available")
+	}
+	claims := resetToken.Claims.(jwt.MapClaims)
+	userid := claims["userid"].(string)
+	password := security.HashAndSalt([]byte(newPassword))
+	update := scylladb.ChangePsw{
+		Password: password,
+		Id:       userid,
 	}
 	stmt, names := qb.Update(tableName).
 		Set("password").

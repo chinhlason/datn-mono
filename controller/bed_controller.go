@@ -33,10 +33,6 @@ func (b *BedController) InsertBeds(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, err.Error())
 	}
 	var bugs []bed_req.InsertBedReq
-	doctor, err := b.Queries.GetProfileCurrent(c)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, err.Error())
-	}
 	for _, req := range reqs {
 		bed, err := b.Queries.GetBedByOption(req.Name, "name", req.RoomName)
 		if err != nil {
@@ -48,11 +44,8 @@ func (b *BedController) InsertBeds(c echo.Context) error {
 				Data:    req.Name,
 			})
 		}
-		room, err := b.Queries.GetRoomByOption(req.RoomName, "name")
-		if err != nil {
-			return c.JSON(http.StatusBadRequest, err.Error())
-		}
-		if room[0].IdDoctor.String() != doctor.Id.String() {
+
+		if b.Queries.CheckPermissionInRoomByName(req.RoomName, c) == false {
 			return c.JSON(http.StatusBadRequest, res.Response{
 				Message: "Do not have permission in this room",
 				Data:    req.Name,

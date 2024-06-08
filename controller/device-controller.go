@@ -141,6 +141,14 @@ func (d *DeviceController) GetInUse(c echo.Context) error {
 	return c.JSON(http.StatusOK, data)
 }
 
+func (d *DeviceController) GetInUseByAdmin(c echo.Context) error {
+	data, err := d.Queries.GetInUseDeviceAdmin(c)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, err.Error())
+	}
+	return c.JSON(http.StatusOK, data)
+}
+
 type Shutdown struct {
 	NewStatus int8 `json:"new_status"`
 }

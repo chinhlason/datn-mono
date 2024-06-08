@@ -21,9 +21,12 @@ func RoomRoute(e *echo.Echo, q *execute.Queries) {
 	c.GET("/get-all", controller.GetAllByCurrDoctor)
 	c.GET("/get-all-by-admin", controller.GetAllByAdmin, middleware.IsADMIN)
 	c.GET("/get", controller.GetByOption, middleware.IsADMIN)
+	c.GET("/get-admin", controller.RoomDetailByAdmin, middleware.IsADMIN)
 	c.GET("/get-by-name", controller.GetRoomByName)
 	c.GET("/get-detail", controller.GetAllShortRecord)
 	c.GET("/get-detail-pagi", controller.GetAllShortRecordPagi)
 	c.PUT("/update", controller.UpdateRoom)
 	c.PUT("/handover", controller.HandOver, middleware.IsADMIN)
+	c.PUT("/delete-member", controller.DeleteMember, middleware.IsADMIN)
+	c.POST("/handover-doctors", controller.HandoverRoom, middleware.IsADMIN)
 }

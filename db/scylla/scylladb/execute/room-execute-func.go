@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"github.com/gocql/gocql"
 	"github.com/google/uuid"
+	"github.com/labstack/echo/v4"
 	"github.com/scylladb/gocqlx/v2/qb"
 	"sort"
 	"time"
@@ -48,6 +49,10 @@ func (q *Queries) InsertRoom(req room_req.CreateRoomReq) error {
 		Query(q.session)
 	stmt.BindStruct(insert)
 	if err := stmt.ExecRelease(); err != nil {
+		return err
+	}
+	err = q.HandoverRoomForNormalDoctor(id.String(), doctor[0].Id.String())
+	if err != nil {
 		return err
 	}
 	return nil
@@ -394,4 +399,187 @@ func (q *Queries) GetAllRecordInRoomPagination(roomName string, page, pageSize i
 	}
 
 	return result, nil, maxPage
+}
+
+func (q *Queries) HandoverRoomForNormalDoctor(idRoom string, idDoctor string) error {
+	_, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	tableName := fmt.Sprintf("%s.usage_room", q.keyspace)
+	id, err := gocql.ParseUUID(uuid.New().String())
+	if err != nil {
+		panic(err)
+	}
+	insert := &model.UsageRoomDoctors{
+		Id:       id,
+		IdRoom:   idRoom,
+		IdDoctor: idDoctor,
+		CreateAt: time.Now(),
+	}
+	stmt := qb.Insert(tableName).
+		Columns("id", "id_room", "id_doctor", "create_at").
+		Query(q.session)
+	stmt.BindStruct(insert)
+	if err := stmt.ExecRelease(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (q *Queries) GetUsageBedByIdDoctorAndIdRoom(idDoctor, idRoom string) (model.UsageRoomDoctors, error) {
+	_, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var usageRoom model.UsageRoomDoctors
+	tableName := fmt.Sprintf("%s.usage_room", q.keyspace)
+
+	stmt, names := qb.Select(tableName).
+		Where(qb.Eq("id_doctor"), qb.Eq("id_room")).
+		AllowFiltering().
+		ToCql()
+
+	query := q.session.Query(stmt, names).BindMap(qb.M{
+		"id_doctor": idDoctor,
+		"id_room":   idRoom,
+	})
+
+	if err := query.GetRelease(&usageRoom); err != nil {
+		return model.UsageRoomDoctors{}, err
+	}
+
+	return usageRoom, nil
+}
+
+func (q *Queries) DeleteDoctorFromRoom(idRoom string, idDoctor string) error {
+	_, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	tableName := fmt.Sprintf("%s.usage_room", q.keyspace)
+	usageRoom, err := q.GetUsageBedByIdDoctorAndIdRoom(idDoctor, idRoom)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	update := &scylladb.HandOver{
+		IdDoctor: "00000000-0000-0000-0000-000000000000",
+		Id:       usageRoom.Id.String(),
+	}
+	stmt, names := qb.Update(tableName).
+		Set("id_doctor").
+		Where(qb.Eq("id")).
+		ToCql()
+
+	query := q.session.Query(stmt, names).BindStruct(update)
+	if err := query.ExecRelease(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (q *Queries) SelectUsageRoomByOption(option string, value string) ([]model.UsageRoomDoctors, error) {
+	_, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	tableName := fmt.Sprintf("%s.usage_room", q.keyspace)
+	var usage_room []model.UsageRoomDoctors
+	stmt, names := qb.Select(tableName).
+		Where(qb.Eq(option)).
+		ToCql()
+	stmt += " ALLOW FILTERING"
+	query := q.session.Query(stmt, names).BindMap(qb.M{
+		option: value,
+	})
+	if err := query.SelectRelease(&usage_room); err != nil {
+		return nil, err
+	}
+	return usage_room, nil
+}
+
+func (q *Queries) SelectAllRoomByCurrDoctor(c echo.Context) ([]model.Rooms, error) {
+	doctor, err := q.GetProfileCurrent(c)
+	var result []model.Rooms
+	if err != nil {
+		return nil, err
+	}
+	records, err := q.SelectUsageRoomByOption("id_doctor", doctor.Id.String())
+	if err != nil {
+		return nil, err
+	}
+	for _, record := range records {
+		room, err := q.GetRoomByOption(record.IdRoom, "id")
+		if err != nil {
+			return nil, err
+		}
+		if len(room) == 0 {
+			return nil, errors.New("no room data found")
+		}
+		result = append(result, room[0])
+	}
+	return result, nil
+}
+
+func (q *Queries) CheckPermissionInRoomById(idRoom string, c echo.Context) bool {
+	rooms, err := q.SelectAllRoomByCurrDoctor(c)
+	var result = false
+	if err != nil {
+		return false
+	}
+	for _, room := range rooms {
+		if room.Id.String() == idRoom {
+			result = true
+		}
+	}
+	return result
+}
+
+func (q *Queries) CheckPermissionInRoomByName(nameRoom string, c echo.Context) bool {
+	rooms, err := q.SelectAllRoomByCurrDoctor(c)
+	var result = false
+	if err != nil {
+		return false
+	}
+	for _, room := range rooms {
+		if room.Name == nameRoom {
+			result = true
+			break
+		}
+	}
+	return result
+}
+
+func (q *Queries) GetRoomDetail(roomName string) (res.RoomDetailRes, error) {
+	room, err := q.GetRoomByOption(roomName, "name")
+	var member []model.Users
+	if err != nil {
+		return res.RoomDetailRes{}, err
+	}
+	if len(room) == 0 {
+		return res.RoomDetailRes{}, errors.New("no room data found")
+	}
+	fmt.Println(room[0].Id.String())
+	usagesRoom, err := q.SelectUsageRoomByOption("id_room", room[0].Id.String())
+	if err != nil {
+		fmt.Println(err)
+		return res.RoomDetailRes{}, err
+	}
+	if len(usagesRoom) == 0 {
+		return res.RoomDetailRes{}, errors.New("no usageRoom data found")
+	}
+	for _, usageRoom := range usagesRoom {
+		mem, _ := q.GetUserByOption(usageRoom.IdDoctor, "id")
+		if len(mem) > 0 {
+			member = append(member, mem[0])
+		}
+	}
+	leader, err := q.GetUserByOption(room[0].IdDoctor.String(), "id")
+	if err != nil {
+		return res.RoomDetailRes{}, err
+	}
+	if len(leader) == 0 {
+		return res.RoomDetailRes{}, errors.New("no member data found")
+	}
+	return res.RoomDetailRes{
+		Id:            room[0].Id.String(),
+		PatientNumber: room[0].PatientNumber,
+		BedNumber:     room[0].BedNumber,
+		Leader:        leader[0],
+		Members:       member,
+	}, nil
 }

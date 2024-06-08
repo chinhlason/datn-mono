@@ -50,11 +50,7 @@ func (r *RoomController) mapToRoomRes(room model.Rooms, userId string) res.Room 
 
 func (r *RoomController) GetAllByCurrDoctor(c echo.Context) error {
 	var res []res.Room
-	user, err := r.Queries.GetProfileCurrent(c)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, err.Error())
-	}
-	rooms, err := r.Queries.GetRoomByOption(user.Id.String(), "id_doctor")
+	rooms, err := r.Queries.SelectAllRoomByCurrDoctor(c)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, err.Error())
 	}
@@ -62,7 +58,8 @@ func (r *RoomController) GetAllByCurrDoctor(c echo.Context) error {
 		return c.JSON(http.StatusOK, nil)
 	}
 	for _, room := range rooms {
-		roomRes := r.mapToRoomRes(room, user.Id.String())
+		user, _ := r.Queries.GetUserByOption(room.IdDoctor.String(), "id")
+		roomRes := r.mapToRoomRes(room, user[0].Id.String())
 		res = append(res, roomRes)
 	}
 	return c.JSON(http.StatusOK, res)
@@ -164,4 +161,33 @@ func (r *RoomController) GetAllShortRecordPagi(c echo.Context) error {
 		Message: maxPageStr,
 		Data:    records,
 	})
+}
+
+func (r *RoomController) HandoverRoom(c echo.Context) error {
+	idRoom := c.QueryParam("room")
+	idDoctor := c.QueryParam("doctor")
+	err := r.Queries.HandoverRoomForNormalDoctor(idRoom, idDoctor)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, err)
+	}
+	return c.JSON(http.StatusOK, "handover room successfully!")
+}
+
+func (r *RoomController) RoomDetailByAdmin(c echo.Context) error {
+	room := c.QueryParam("room")
+	detail, err := r.Queries.GetRoomDetail(room)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, err.Error())
+	}
+	return c.JSON(http.StatusOK, detail)
+}
+
+func (r *RoomController) DeleteMember(c echo.Context) error {
+	idRoom := c.QueryParam("room")
+	doctor := c.QueryParam("doctor")
+	err := r.Queries.DeleteDoctorFromRoom(idRoom, doctor)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, err.Error())
+	}
+	return c.JSON(http.StatusOK, "delete successfully")
 }

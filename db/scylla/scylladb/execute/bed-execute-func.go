@@ -134,11 +134,7 @@ func (q *Queries) GetBedByOption(value string, option string, roomName string) (
 func (q *Queries) GetAvailableAndDisableBed(c echo.Context) ([]model.Beds, error) {
 	_, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	doctor, err := q.GetProfileCurrent(c)
-	if err != nil {
-		return nil, err
-	}
-	rooms, err := q.GetRoomByOption(doctor.Id.String(), "id_doctor")
+	rooms, err := q.SelectAllRoomByCurrDoctor(c)
 	if err != nil {
 		return nil, err
 	}
@@ -163,11 +159,7 @@ func (q *Queries) GetAvailableAndDisableBed(c echo.Context) ([]model.Beds, error
 func (q *Queries) GetAvailableBed(c echo.Context) ([]model.Beds, error) {
 	_, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	doctor, err := q.GetProfileCurrent(c)
-	if err != nil {
-		return nil, err
-	}
-	rooms, err := q.GetRoomByOption(doctor.Id.String(), "id_doctor")
+	rooms, err := q.SelectAllRoomByCurrDoctor(c)
 	if err != nil {
 		return nil, err
 	}
@@ -345,6 +337,14 @@ func (q *Queries) CreateUsageBed(req req2.UsageBedReq, c echo.Context) error {
 		return errors.New("Bed is not available, cant handover")
 	}
 
+	room, err := q.GetRoomByOption(req.RoomName, "name")
+	if err != nil {
+		return err
+	}
+	if len(room) == 0 {
+		return errors.New("no room data found")
+	}
+
 	patient, err := q.GetPatient(req.PatientCode, "patient_code")
 	if err != nil {
 		return err
@@ -383,6 +383,11 @@ func (q *Queries) CreateUsageBed(req req2.UsageBedReq, c echo.Context) error {
 		return err
 	}
 	err = q.UpdateNumber(1, "patient_number", req.RoomName)
+	if err != nil {
+		return err
+	}
+
+	err = q.UpdateRoomForRecord(room[0].Id.String(), record[0].Id.String())
 	if err != nil {
 		return err
 	}
@@ -577,12 +582,7 @@ func (q *Queries) GetBedRecord(c echo.Context) ([]res.BedRecord, error) {
 
 	var results []res.BedRecord
 
-	doctor, err := q.GetProfileCurrent(c)
-	if err != nil {
-		return nil, err
-	}
-
-	rooms, err := q.GetRoomByOption(doctor.Id.String(), "id_doctor")
+	rooms, err := q.SelectAllRoomByCurrDoctor(c)
 	if err != nil {
 		return nil, err
 	}

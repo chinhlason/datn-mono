@@ -592,31 +592,32 @@ func (q *Queries) GetAllPendingRecord(c echo.Context) ([]res.PendingRecordRes, e
 	if err != nil {
 		return nil, err
 	}
-	records, err := q.GetRecordByOption(doctor.Id.String(), "id_doctor")
+	records, err := q.GetRecordByOption("PENDING", "status")
 	if err != nil {
 		return nil, err
 	}
+	if len(records) == 0 {
+		return nil, errors.New("no record data found")
+	}
 	var recordRes []res.PendingRecordRes
 	for _, record := range records {
-		if record.Status == "PENDING" {
-			patient, err := q.GetPatient(record.IdPatient.String(), "id")
-			if err != nil {
-				return nil, err
-			}
-			if len(patient) == 0 {
-				return nil, errors.New("No patient data found")
-			}
-			res := res.PendingRecordRes{
-				Id:          record.Id.String(),
-				DoctorCode:  doctor.DoctorCode,
-				PatientCode: patient[0].PatientCode,
-				Fullname:    patient[0].Fullname,
-				Phone:       patient[0].Phone,
-				Detail:      patient[0].Reason,
-				CreateAt:    record.CreateAt,
-			}
-			recordRes = append(recordRes, res)
+		patient, err := q.GetPatient(record.IdPatient.String(), "id")
+		if err != nil {
+			return nil, err
 		}
+		if len(patient) == 0 {
+			return nil, errors.New("No patient data found")
+		}
+		res := res.PendingRecordRes{
+			Id:          record.Id.String(),
+			DoctorCode:  doctor.DoctorCode,
+			PatientCode: patient[0].PatientCode,
+			Fullname:    patient[0].Fullname,
+			Phone:       patient[0].Phone,
+			Detail:      patient[0].Reason,
+			CreateAt:    record.CreateAt,
+		}
+		recordRes = append(recordRes, res)
 	}
 	return recordRes, nil
 }
@@ -628,15 +629,94 @@ func (q *Queries) GetAllPatientByDoctor(c echo.Context) ([]res.TotalRecordRes, e
 	var resp []res.TotalRecordRes
 	var mu sync.Mutex     // To protect concurrent writes to resp
 	var wg sync.WaitGroup // To wait for all go routines to complete
-
-	doctor, err := q.GetProfileCurrent(c)
+	var records []model.MedicalRecords
+	rooms, err := q.SelectAllRoomByCurrDoctor(c)
 	if err != nil {
 		return nil, err
 	}
 
-	records, err := q.GetRecordByOption(doctor.Id.String(), "id_doctor")
+	for _, room := range rooms {
+		record, err := q.GetRecordByOption(room.Id.String(), "id_room")
+		if err != nil {
+			return nil, err
+		}
+		if len(record) > 0 {
+			for _, temp := range record {
+				records = append(records, temp)
+			}
+		}
+	}
+
+	// Channel to collect errors
+	errChan := make(chan error, len(records))
+	defer close(errChan)
+
+	for _, record := range records {
+		wg.Add(1)
+		go func(record model.MedicalRecords) {
+			defer wg.Done()
+			patient, err := q.GetPatient(record.IdPatient.String(), "id")
+			if err != nil {
+				errChan <- err
+				return
+			}
+			temp := res.TotalRecordRes{
+				Id:          record.Id.String(),
+				PatientCode: patient[0].PatientCode,
+				Fullname:    patient[0].Fullname,
+				Address:     patient[0].Address,
+				Phone:       patient[0].Phone,
+				Status:      record.Status,
+				More:        patient[0].Reason,
+			}
+
+			mu.Lock()
+			resp = append(resp, temp)
+			mu.Unlock()
+		}(record)
+	}
+
+	// Wait for all goroutines to finish
+	wg.Wait()
+
+	// Check if there were any errors
+	select {
+	case err := <-errChan:
+		return nil, err
+	default:
+	}
+
+	return resp, nil
+}
+
+func (q *Queries) getAllRecord() ([]model.MedicalRecords, error) {
+	_, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
+	tableName := fmt.Sprintf("%s.medical_records", q.keyspace)
+	var records []model.MedicalRecords
+	stmt, names := qb.Select(tableName).
+		ToCql()
+	query := q.session.Query(stmt, names)
+	if err := query.SelectRelease(&records); err != nil {
+		return nil, err
+	}
+	return records, nil
+}
+
+func (q *Queries) GetAllPatientByAdmin(c echo.Context) ([]res.TotalRecordRes, error) {
+	_, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
+
+	var resp []res.TotalRecordRes
+	var mu sync.Mutex     // To protect concurrent writes to resp
+	var wg sync.WaitGroup // To wait for all go routines to complete
+	var records []model.MedicalRecords
+	records, err := q.getAllRecord()
 	if err != nil {
 		return nil, err
+	}
+	if len(records) == 0 {
+		return nil, errors.New("no data record found")
 	}
 
 	// Channel to collect errors
@@ -730,7 +810,7 @@ func (q *Queries) SearchTotalRecord(search string, c echo.Context) ([]res.TotalR
 	if err != nil {
 		return nil, err
 	}
-	doctor, err := q.GetProfileCurrent(c)
+	rooms, err := q.SelectAllRoomByCurrDoctor(c)
 	if err != nil {
 		return nil, err
 	}
@@ -745,29 +825,102 @@ func (q *Queries) SearchTotalRecord(search string, c echo.Context) ([]res.TotalR
 		}
 		if len(records) > 1 {
 			for _, record := range records {
-				if record.IdDoctor.String() == doctor.Id.String() {
-					resp := res.TotalRecordRes{
+				for _, room := range rooms {
+					if record.IdRoom == room.Id.String() {
+						resp := res.TotalRecordRes{
+							Id:          record.Id.String(),
+							PatientCode: patient.PatientCode,
+							Fullname:    patient.Fullname,
+							Address:     patient.Address,
+							Phone:       patient.Phone,
+							Status:      record.Status,
+							More:        patient.Reason,
+						}
+						result = append(result, resp)
+					}
+				}
+			}
+		}
+		for _, room := range rooms {
+			if records[0].IdRoom == room.Id.String() {
+				resp := res.TotalRecordRes{
+					Id:          records[0].Id.String(),
+					PatientCode: patient.PatientCode,
+					Fullname:    patient.Fullname,
+					Address:     patient.Address,
+					Phone:       patient.Phone,
+					Status:      records[0].Status,
+					More:        patient.Reason,
+				}
+				result = append(result, resp)
+			}
+		}
+	}
+	if len(result) == 0 {
+		return nil, errors.New("No record data found")
+	}
+	return result, nil
+}
+
+func (q *Queries) UpdateRoomForRecord(idRoom, id string) error {
+	_, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
+	tableName := fmt.Sprintf("%s.medical_records", q.keyspace)
+	update := &model.UpdateRoomForRecord{
+		IdRoom: idRoom,
+		Id:     id,
+	}
+	stmt, names := qb.Update(tableName).
+		Set("id_room").
+		Where(qb.Eq("id")).
+		ToCql()
+
+	query := q.session.Query(stmt, names).BindStruct(update)
+	if err := query.ExecRelease(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (q *Queries) SearchPendingRecord(search string, c echo.Context) ([]res.PendingRecordRes, error) {
+	_, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
+	patients, err := q.searchTotalPatient(search)
+	if err != nil {
+		return nil, err
+	}
+	var result []res.PendingRecordRes
+	for _, patient := range patients {
+		records, err := q.GetRecordByOption(patient.Id.String(), "id_patient")
+		if err != nil {
+			return nil, err
+		}
+		if len(records) == 0 {
+			return nil, errors.New("No record data found")
+		}
+		if len(records) > 1 {
+			for _, record := range records {
+				if record.Status == "PENDING" {
+					resp := res.PendingRecordRes{
 						Id:          record.Id.String(),
 						PatientCode: patient.PatientCode,
 						Fullname:    patient.Fullname,
-						Address:     patient.Address,
 						Phone:       patient.Phone,
-						Status:      record.Status,
-						More:        patient.Reason,
+						Detail:      patient.Reason,
+						CreateAt:    record.CreateAt,
 					}
 					result = append(result, resp)
 				}
 			}
 		}
-		if records[0].IdDoctor.String() == doctor.Id.String() {
-			resp := res.TotalRecordRes{
+		if records[0].Status == "PENDING" {
+			resp := res.PendingRecordRes{
 				Id:          records[0].Id.String(),
 				PatientCode: patient.PatientCode,
 				Fullname:    patient.Fullname,
-				Address:     patient.Address,
 				Phone:       patient.Phone,
-				Status:      records[0].Status,
-				More:        patient.Reason,
+				Detail:      patient.Reason,
+				CreateAt:    records[0].CreateAt,
 			}
 			result = append(result, resp)
 		}
@@ -776,4 +929,107 @@ func (q *Queries) SearchTotalRecord(search string, c echo.Context) ([]res.TotalR
 		return nil, errors.New("No record data found")
 	}
 	return result, nil
+}
+
+func (q *Queries) SearchRecordByAdmin(search string, c echo.Context) ([]res.TotalRecordRes, error) {
+	_, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
+	patients, err := q.searchTotalPatient(search)
+	if err != nil {
+		return nil, err
+	}
+	var result []res.TotalRecordRes
+	for _, patient := range patients {
+		records, err := q.GetRecordByOption(patient.Id.String(), "id_patient")
+		if err != nil {
+			return nil, err
+		}
+		if len(records) == 0 {
+			return nil, errors.New("No record data found")
+		}
+		if len(records) > 1 {
+			for _, record := range records {
+
+				resp := res.TotalRecordRes{
+					Id:          record.Id.String(),
+					PatientCode: patient.PatientCode,
+					Fullname:    patient.Fullname,
+					Address:     patient.Address,
+					Phone:       patient.Phone,
+					Status:      record.Status,
+					More:        patient.Reason,
+				}
+				result = append(result, resp)
+			}
+		}
+		resp := res.TotalRecordRes{
+			Id:          records[0].Id.String(),
+			PatientCode: patient.PatientCode,
+			Fullname:    patient.Fullname,
+			Address:     patient.Address,
+			Phone:       patient.Phone,
+			Status:      records[0].Status,
+			More:        patient.Reason,
+		}
+		result = append(result, resp)
+	}
+	if len(result) == 0 {
+		return nil, errors.New("No record data found")
+	}
+	return result, nil
+}
+
+func (q *Queries) StatisticalNumber(c echo.Context) (res.StatisticalRes, error) {
+	type result struct {
+		pendingRecords   []res.PendingRecordRes
+		availableBeds    []model.Beds
+		availableDevices []model.Devices
+		err              error
+	}
+
+	resultsCh := make(chan result)
+
+	go func() {
+		pendingRecords, _ := q.GetAllPendingRecord(c)
+		resultsCh <- result{pendingRecords: pendingRecords, err: nil}
+	}()
+
+	go func() {
+		availableBeds, _ := q.GetAvailableBed(c)
+		resultsCh <- result{availableBeds: availableBeds, err: nil}
+	}()
+
+	go func() {
+		devices, err := q.GetAllDevice()
+		if err != nil {
+			resultsCh <- result{err: err}
+			return
+		}
+		var availableDevices []model.Devices
+		for _, device := range devices {
+			if device.Status == "IN_STORAGE" || device.Status == "DISABLED" {
+				availableDevices = append(availableDevices, device)
+			}
+		}
+		resultsCh <- result{availableDevices: availableDevices}
+	}()
+
+	var resStatistical res.StatisticalRes
+	for i := 0; i < 3; i++ {
+		r := <-resultsCh
+		if r.err != nil {
+			return res.StatisticalRes{}, r.err
+		}
+		if r.pendingRecords != nil {
+			resStatistical.PendingRc = len(r.pendingRecords)
+		}
+		if r.availableBeds != nil {
+			resStatistical.AvailableBed = len(r.availableBeds)
+		}
+		if r.availableDevices != nil {
+			resStatistical.AvailableDevice = len(r.availableDevices)
+		}
+	}
+
+	return resStatistical, nil
 }

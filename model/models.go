@@ -27,6 +27,13 @@ type Rooms struct {
 	UpdateAt      time.Time  `json:"update_at"`
 }
 
+type UsageRoomDoctors struct {
+	Id       gocql.UUID
+	IdRoom   string
+	IdDoctor string
+	CreateAt time.Time
+}
+
 type Beds struct {
 	Id       gocql.UUID `json:"id"`
 	IdRoom   gocql.UUID `json:"id_room"`
@@ -42,6 +49,7 @@ type MedicalRecords struct {
 	IdDoctor  gocql.UUID `json:"id_doctor"`
 	IdUpdater gocql.UUID `json:"id_updater"`
 	Status    string     `json:"status"`
+	IdRoom    string     `json:"id_room"`
 	CreateAt  time.Time  `json:"create_at"`
 	UpdateAt  time.Time  `json:"update_at"`
 }
@@ -122,4 +130,15 @@ type UsageRoom struct {
 	Status   string     `json:"status"`
 	CreateAt time.Time  `json:"create_at"`
 	EndAt    time.Time  `json:"end_at"`
+}
+
+type UpdateRoomForRecord struct {
+	IdRoom string
+	Id     string
+}
+
+type ResetToken struct {
+	Id       gocql.UUID
+	IdDoctor string
+	Value    string
 }

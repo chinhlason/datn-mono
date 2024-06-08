@@ -24,6 +24,7 @@ func DeviceRoute(e *echo.Echo, q *execute.Queries, client mqtt.Client) {
 	c.GET("/get-by-option", controller.GetDeviceByOption)
 	c.GET("/in-storage", controller.GetDeviceInStorage)
 	c.GET("/get-in-use", controller.GetInUse)
+	c.GET("/get-in-use-admin", controller.GetInUseByAdmin, middleware.IsADMIN)
 	c.GET("/get-all", controller.GetAllDevices)
 	c.POST("/use-device", controller.UseDevice)
 	c.PUT("/unuse-device", controller.UnuseDevice)

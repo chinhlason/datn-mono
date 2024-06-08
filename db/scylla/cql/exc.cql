@@ -37,6 +37,7 @@ create table if not exists medical_records(
     id_patient uuid,
     id_doctor uuid,
     id_updater uuid,
+    id_room text,
     status text,
     create_at timestamp,
     update_at timestamp,
@@ -108,4 +109,19 @@ create table if not exists record_history(
     content text,
     create_at timestamp,
     primary key ( (id) )
+);
+
+create table if not exists usage_room(
+    id uuid,
+    id_room uuid,
+    id_doctor uuid,
+    create_at timestamp,
+    primary key ( id )
+);
+
+create table if not exists reset_token(
+    id uuid,
+    id_doctor uuid,
+    value text,
+    primary key ( id )
 );

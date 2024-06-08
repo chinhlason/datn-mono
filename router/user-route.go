@@ -27,10 +27,15 @@ func UserRoute(e *echo.Echo, q *execute.Queries) {
 	e.POST("/login", controller.Login)
 	e.POST("/log-out", controller.Logout)
 	e.GET("/test", controller.Test)
-	c.POST("/refresh-token", controller.RefreshToken)
+	e.POST("/refresh-token", controller.RefreshToken)
+	e.POST("/send-mail", controller.SendMail)
+	e.POST("/verify-token", controller.VerifyToken)
+	e.POST("/reset-psw", controller.ResetPsw)
+
 	c.GET("/get-all-doctors", controller.GetAllUsers, middleware.IsADMIN)
+	c.GET("/get", controller.GetUerById, middleware.IsADMIN)
 	c.PUT("/update", controller.UpdateProfile)
-	c.PUT("/change-password", controller.ChangePassword)
+	c.PUT("/change-password", controller.ChangePasswordUser)
 	c.PUT("/change-permission", controller.ChangePermission, middleware.IsADMIN)
 	c.GET("/profile", controller.GetProfileCurrent)
 }
