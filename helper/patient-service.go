@@ -2,10 +2,13 @@ package helper
 
 import (
 	"fmt"
+	"github.com/rainycape/unidecode"
 	"strings"
 )
 
 func GenPatientCode(name string, phoneNumber string, ccid string) string {
+	name = unidecode.Unidecode(name)
+
 	nameParts := strings.Fields(name)
 	lastName := nameParts[len(nameParts)-1]
 
