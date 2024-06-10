@@ -31,4 +31,6 @@ func DeviceRoute(e *echo.Echo, q *execute.Queries, client mqtt.Client) {
 	c.PUT("/disable", controller.DisableDevice)
 	c.PUT("/enable", controller.EnableDevice)
 	c.POST("/on-off", controller.OnOffDevice)
+	c.GET("/check-online-admin", controller.CheckOnlineAdmin, middleware.IsADMIN)
+	c.GET("/check-online", controller.CheckOnline)
 }

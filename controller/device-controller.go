@@ -5,11 +5,13 @@ import (
 	"HospitalManager/dto/req/device_req"
 	"HospitalManager/dto/res"
 	"HospitalManager/model"
-	"encoding/json"
+	mqtt2 "HospitalManager/mqtt"
+	"errors"
 	"fmt"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/labstack/echo/v4"
 	"net/http"
+	"strconv"
 )
 
 type DeviceController struct {
@@ -158,26 +160,15 @@ type Message struct {
 	Shutdown Shutdown `json:"shutdown"`
 }
 
-func publish(client mqtt.Client, msg Message, topic string) {
-	jsonData, err := json.Marshal(msg)
-	fmt.Println(jsonData)
-	if err != nil {
-		fmt.Printf("JSON marshaling failed: %s\n", err)
-	}
-	token := client.Publish(topic, 0, false, jsonData)
-	token.Wait()
-}
-
 func (d *DeviceController) OnOffDevice(c echo.Context) error {
 	control := c.QueryParam("control")
-	fmt.Println(control)
-	fmt.Println(control == "on")
 	var controlInt int8
 	if control == "on" {
 		controlInt = 0
 	} else {
 		controlInt = 1
 	}
+	fmt.Println(control == "on")
 	device := c.QueryParam("device")
 	topic := fmt.Sprintf("ibme/device/shutdown/update/%s", device)
 	msg := Message{
@@ -186,6 +177,114 @@ func (d *DeviceController) OnOffDevice(c echo.Context) error {
 			NewStatus: controlInt,
 		},
 	}
-	publish(d.Mqtt, msg, topic)
+	mqtt2.Publish(d.Mqtt, msg, topic)
 	return c.JSON(http.StatusOK, msg)
+}
+func (d *DeviceController) CheckOnline(c echo.Context) error {
+	topicSub := "ibme/server/online/list"
+	topicPub := "ibme/web/online/list"
+
+	type Result struct {
+		devices []model.Devices
+		err     error
+	}
+
+	rooms, _ := d.Queries.SelectAllRoomByCurrDoctor(c)
+
+	// Kênh để nhận kết quả từ các goroutine
+	resultChan := make(chan Result)
+
+	for _, room := range rooms {
+		go func(room model.Rooms) {
+			var result []model.Devices
+			record, _ := d.Queries.GetRecordByOption(room.Id.String(), "id_room")
+			if len(record) > 0 {
+				var records []model.MedicalRecords
+				for _, temp := range record {
+					records = append(records, temp)
+				}
+
+				listOnline, err := mqtt2.CheckOnline(d.Mqtt, topicSub, topicPub)
+				if err != nil {
+					resultChan <- Result{nil, err}
+					return
+				}
+
+				if len(listOnline.Device) == 0 {
+					resultChan <- Result{nil, nil}
+					return
+				}
+
+				for _, temp := range listOnline.Device {
+					device, err := d.Queries.GetDeviceByOption(temp, "serial")
+					if err != nil {
+						resultChan <- Result{nil, err}
+						return
+					}
+					if len(device) > 0 {
+						for _, record := range records {
+							usageDevice, _ := d.Queries.GetUsageDeviceByOption(record.Id.String(), "id_record")
+							for _, usaDevice := range usageDevice {
+								if usaDevice.IdDevice == device[0].Id && usaDevice.Status == "IN_USE" {
+									result = append(result, device[0])
+								}
+							}
+						}
+					}
+				}
+				resultChan <- Result{result, nil}
+			} else {
+				resultChan <- Result{nil, nil}
+			}
+		}(room)
+	}
+
+	var finalResult []model.Devices
+	for range rooms {
+		res := <-resultChan
+		if res.err != nil {
+			return c.JSON(http.StatusBadRequest, res.err.Error())
+		}
+		if res.devices != nil {
+			finalResult = append(finalResult, res.devices...)
+		}
+	}
+
+	if len(finalResult) == 0 {
+		return c.JSON(http.StatusBadRequest, errors.New("no device data found"))
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"message": strconv.Itoa(len(finalResult)),
+		"data":    finalResult,
+	})
+}
+
+func (d *DeviceController) CheckOnlineAdmin(c echo.Context) error {
+	topicSub := "ibme/server/online/list"
+	topicPub := "ibme/web/online/list"
+	var result []model.Devices
+	listOnline, err := mqtt2.CheckOnline(d.Mqtt, topicSub, topicPub)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, err.Error())
+	}
+	if len(listOnline.Device) == 0 {
+		return c.JSON(http.StatusOK, res.Response{Message: "no online data", Data: nil})
+	}
+	for _, temp := range listOnline.Device {
+		device, err := d.Queries.GetDeviceByOption(temp, "serial")
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, err.Error())
+		}
+		if len(device) > 0 {
+			result = append(result, device[0])
+		}
+	}
+	if len(result) == 0 {
+		return c.JSON(http.StatusBadRequest, errors.New("no device data found"))
+	}
+	return c.JSON(http.StatusOK, res.Response{
+		Message: strconv.Itoa(listOnline.Number),
+		Data:    result,
+	})
 }

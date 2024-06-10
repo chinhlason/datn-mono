@@ -405,14 +405,6 @@ func (q *Queries) GetInUseDevice(c echo.Context) ([]res.DeviceInUse, error) {
 	defer cancel()
 	var result []res.DeviceInUse
 	var records []model.MedicalRecords
-	//doctor, err := q.GetProfileCurrent(c)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//records, err := q.GetRecordByOption(doctor.Id.String(), "id_doctor")
-	//if err != nil {
-	//	return nil, err
-	//}
 
 	rooms, _ := q.SelectAllRoomByCurrDoctor(c)
 	for _, room := range rooms {
