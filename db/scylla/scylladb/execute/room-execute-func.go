@@ -360,22 +360,22 @@ func (q *Queries) GetAllRecordInRoomPagination(roomName string, page, pageSize i
 							errChan <- err
 							return
 						}
+						shortRecord := res.ShortRecord{
+							IdRecord:     record.Id,
+							PatientCode:  record.Patient.PatientCode,
+							PatientName:  record.Patient.Fullname,
+							RoomName:     roomName,
+							BedName:      bed.Name,
+							DeviceSerial: record.CurrDevice.Serial,
+							Status:       record.Status,
+							BedStt:       bed.Status,
+							Contact:      record.Patient.Phone,
+							More:         record.Patient.Reason,
+						}
+						resultChan <- shortRecord
 					}
 				}
 
-				shortRecord := res.ShortRecord{
-					IdRecord:     record.Id,
-					PatientCode:  record.Patient.PatientCode,
-					PatientName:  record.Patient.Fullname,
-					RoomName:     roomName,
-					BedName:      bed.Name,
-					DeviceSerial: record.CurrDevice.Serial,
-					Status:       record.Status,
-					BedStt:       bed.Status,
-					Contact:      record.Patient.Phone,
-					More:         record.Patient.Reason,
-				}
-				resultChan <- shortRecord
 			} else {
 				nullShortRecord := res.ShortRecord{
 					IdRecord:     "",
