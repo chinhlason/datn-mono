@@ -445,22 +445,12 @@ func (q *Queries) GetUsageBedByOptionAndUnavalible(value string, option string) 
 	return usage_bed, nil
 }
 
-func (q *Queries) UnuseBed(bedName string, roomName string, c echo.Context) error {
+func (q *Queries) UnuseBed(id, bed, room string, c echo.Context) error {
 	_, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	tableName := fmt.Sprintf("%s.usage_bed", q.keyspace)
-	bed, err := q.GetBedByOption(bedName, "name", roomName)
-	if err != nil {
-		return err
-	}
-	if len(bed) == 0 {
-		return errors.New("No bed data found")
-	}
-	if bed[0].Status == "AVAILABLE" {
-		return errors.New("Bed already available")
-	}
 
-	usage_bed, err := q.GetUsageBedByOption(bed[0].Id.String(), "id_bed")
+	usage_bed, err := q.GetUsageBedByOption(id, "id_record")
 	if err != nil {
 		return err
 	}
@@ -468,7 +458,7 @@ func (q *Queries) UnuseBed(bedName string, roomName string, c echo.Context) erro
 		return errors.New("No usage bed data found")
 	}
 
-	record, err := q.GetRecordByOption(usage_bed[0].IdRecord.String(), "id")
+	record, err := q.GetRecordByOption(id, "id")
 	if err != nil {
 		return err
 	}
@@ -490,12 +480,12 @@ func (q *Queries) UnuseBed(bedName string, roomName string, c echo.Context) erro
 	if err := query.ExecRelease(); err != nil {
 		return err
 	}
-	err = q.UpdateNumber((-1), "patient_number", roomName)
+	err = q.UpdateNumber((-1), "patient_number", room)
 	if err != nil {
 		return err
 	}
 
-	err = q.ChangeRecordStatus(record[0].Id.String(), "PENDING")
+	err = q.ChangeRecordStatus(id, "PENDING")
 	if err != nil {
 		return err
 	}
@@ -512,7 +502,7 @@ func (q *Queries) UnuseBed(bedName string, roomName string, c echo.Context) erro
 		return err
 	}
 
-	err = q.ChangeBedStatus(bedName, roomName)
+	err = q.ChangeBedStatus(bed, room)
 	if err != nil {
 		return err
 	}

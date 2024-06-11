@@ -148,7 +148,8 @@ func (b *BedController) UsageBed(c echo.Context) error {
 func (b *BedController) UnuseBed(c echo.Context) error {
 	bed := c.QueryParam("bed")
 	room := c.QueryParam("room")
-	err := b.Queries.UnuseBed(bed, room, c)
+	id := c.QueryParam("id")
+	err := b.Queries.UnuseBed(id, bed, room, c)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, err.Error())
 	}

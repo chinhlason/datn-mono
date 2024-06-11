@@ -13,6 +13,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/scylladb/gocqlx/v2/qb"
 	"sort"
+	"sync"
 	"time"
 )
 
@@ -300,10 +301,8 @@ func (q *Queries) GetAllRecordInRoomPagination(roomName string, page, pageSize i
 	if len(beds) == 0 {
 		return nil, errors.New("No beds data found"), 0
 	}
-	maxPage := len(beds) / pageSize
-	if maxPage == 0 {
-		maxPage = 1
-	}
+	maxPage := (len(beds) + pageSize - 1) / pageSize
+
 	// Tạo slice riêng biệt cho giường UNAVAILABLE và giường khác
 	var unavailableBeds []model.Beds
 	var otherBeds []model.Beds
@@ -334,14 +333,14 @@ func (q *Queries) GetAllRecordInRoomPagination(roomName string, page, pageSize i
 	}
 	pagedBeds := sortedBeds[start:end]
 
-	// Channel để thu thập kết quả
+	var wg sync.WaitGroup
 	resultChan := make(chan res.ShortRecord, len(pagedBeds))
 	errChan := make(chan error, len(pagedBeds))
-	defer close(resultChan)
-	defer close(errChan)
 
 	for _, bed := range pagedBeds {
+		wg.Add(1)
 		go func(bed model.Beds) {
+			defer wg.Done()
 			if bed.Status == "UNAVAILABLE" {
 				usagebed, err := q.GetUsageBedByOptionAndUnavalible(bed.Id.String(), "id_bed")
 				if err != nil {
@@ -354,8 +353,9 @@ func (q *Queries) GetAllRecordInRoomPagination(roomName string, page, pageSize i
 				}
 				var record res.RecordRes
 				for _, element := range usagebed {
+					fmt.Println("check2", element.Status)
 					if element.Status == "IN_USE" {
-						record, err = q.GetRecordWithGoRoutine(usagebed[0].IdRecord.String())
+						record, err = q.GetRecordWithGoRoutine(element.IdRecord.String())
 						if err != nil {
 							errChan <- err
 							return
@@ -392,6 +392,12 @@ func (q *Queries) GetAllRecordInRoomPagination(roomName string, page, pageSize i
 			}
 		}(bed)
 	}
+
+	go func() {
+		wg.Wait()
+		close(resultChan)
+		close(errChan)
+	}()
 
 	// Thu thập kết quả
 	for i := 0; i < len(pagedBeds); i++ {

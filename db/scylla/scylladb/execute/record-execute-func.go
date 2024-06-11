@@ -537,29 +537,32 @@ func (q *Queries) GetRecordWithGoRoutine(id string) (res.RecordRes, error) {
 
 	var lastestBedRes res.BedRes
 
-	if len(usageBeds) > 0 {
-		var latestBed model.Beds
-		sort.Slice(usageBeds, func(i, j int) bool {
-			return usageBeds[i].CreateAt.After(usageBeds[j].CreateAt)
-		})
-		// Lấy bed mới nhất từ danh sách đã sắp xếp
-		latestBed, err := q.GetBedById(usageBeds[0].IdBed.String())
-		if err != nil {
-			return res.RecordRes{}, err
+	if record[0].Status == "LEAVED" {
+		lastestBedRes = res.BedRes{}
+	} else {
+		if len(usageBeds) > 0 {
+			var latestBed model.Beds
+			sort.Slice(usageBeds, func(i, j int) bool {
+				return usageBeds[i].CreateAt.After(usageBeds[j].CreateAt)
+			})
+			// Lấy bed mới nhất từ danh sách đã sắp xếp
+			latestBed, err := q.GetBedById(usageBeds[0].IdBed.String())
+			if err != nil {
+				return res.RecordRes{}, err
+			}
+			room, _ := q.GetRoomByOption(latestBed.IdRoom.String(), "id")
+
+			lastestBedRes.Id = latestBed.Id
+			lastestBedRes.Name = latestBed.Name
+			lastestBedRes.Status = latestBed.Status
+			lastestBedRes.CreateAt = latestBed.CreateAt
+			lastestBedRes.UpdateAt = latestBed.UpdateAt
+			lastestBedRes.Room = room[0]
+
+			if lastestBedRes.Status == "AVAILABLE" {
+				lastestBedRes = res.BedRes{}
+			}
 		}
-		room, _ := q.GetRoomByOption(latestBed.IdRoom.String(), "id")
-
-		lastestBedRes.Id = latestBed.Id
-		lastestBedRes.Name = latestBed.Name
-		lastestBedRes.Status = latestBed.Status
-		lastestBedRes.CreateAt = latestBed.CreateAt
-		lastestBedRes.UpdateAt = latestBed.UpdateAt
-		lastestBedRes.Room = room[0]
-
-		if lastestBedRes.Status == "AVAILABLE" {
-			lastestBedRes = res.BedRes{}
-		}
-
 	}
 
 	historyRes = q.mapHistoryToHistoryRes(history)
