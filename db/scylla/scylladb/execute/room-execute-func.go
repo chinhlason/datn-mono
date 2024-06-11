@@ -375,7 +375,6 @@ func (q *Queries) GetAllRecordInRoomPagination(roomName string, page, pageSize i
 						resultChan <- shortRecord
 					}
 				}
-
 			} else {
 				nullShortRecord := res.ShortRecord{
 					IdRecord:     "",

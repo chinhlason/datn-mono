@@ -204,13 +204,7 @@ func (q *Queries) UseDevice(req device_req.UseDeviceReq, c echo.Context) error {
 	_, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	tableName := fmt.Sprintf("%s.usage_device", q.keyspace)
-	patient, err := q.GetPatient(req.PatientCode, "patient_code")
-	if err != nil {
-		return err
-	}
-	if len(patient) == 0 {
-		return errors.New("No patient data found")
-	}
+
 	device, err := q.GetDeviceByOption(req.Serial, "serial")
 	if err != nil {
 		return err
@@ -221,7 +215,7 @@ func (q *Queries) UseDevice(req device_req.UseDeviceReq, c echo.Context) error {
 	if device[0].Status == "IN_USE" || device[0].Status == "DISABLED" {
 		return errors.New("device is being used, can handover ")
 	}
-	record, err := q.GetRecordByOption(patient[0].Id.String(), "id_patient")
+	record, err := q.GetRecordByOption(req.IdRecord, "id")
 	if err != nil {
 		return err
 	}

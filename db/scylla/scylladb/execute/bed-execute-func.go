@@ -345,15 +345,7 @@ func (q *Queries) CreateUsageBed(req req2.UsageBedReq, c echo.Context) error {
 		return errors.New("no room data found")
 	}
 
-	patient, err := q.GetPatient(req.PatientCode, "patient_code")
-	if err != nil {
-		return err
-	}
-
-	if len(patient) == 0 {
-		return errors.New("No patient data found")
-	}
-	record, err := q.GetRecordByOption(patient[0].Id.String(), "id_patient")
+	record, err := q.GetRecordByOption(req.IdRecord, "id")
 	if err != nil {
 		return err
 	}

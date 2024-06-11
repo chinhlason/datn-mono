@@ -22,15 +22,8 @@ func (q *Queries) CreateNote(req note_req.NoteReq, c echo.Context) error {
 		panic(err)
 	}
 
-	patient, err := q.GetPatient(req.PatientCode, "patient_code")
-	if err != nil {
-		return err
-	}
-	if len(patient) == 0 {
-		return errors.New("No patient data found")
-	}
 	var record model.MedicalRecords
-	records, err := q.GetRecordByOption(patient[0].Id.String(), "id_patient")
+	records, err := q.GetRecordByOption(req.IdRecord, "id")
 	if err != nil {
 		return err
 	}
