@@ -352,11 +352,17 @@ func (q *Queries) GetAllRecordInRoomPagination(roomName string, page, pageSize i
 					errChan <- errors.New("No usagebed data found")
 					return
 				}
-				record, err := q.GetRecordWithGoRoutine(usagebed[0].IdRecord.String())
-				if err != nil {
-					errChan <- err
-					return
+				var record res.RecordRes
+				for _, element := range usagebed {
+					if element.Status == "IN_USE" {
+						record, err = q.GetRecordWithGoRoutine(usagebed[0].IdRecord.String())
+						if err != nil {
+							errChan <- err
+							return
+						}
+					}
 				}
+
 				shortRecord := res.ShortRecord{
 					IdRecord:     record.Id,
 					PatientCode:  record.Patient.PatientCode,

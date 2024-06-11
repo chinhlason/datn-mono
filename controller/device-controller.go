@@ -180,6 +180,35 @@ func (d *DeviceController) OnOffDevice(c echo.Context) error {
 	mqtt2.Publish(d.Mqtt, msg, topic)
 	return c.JSON(http.StatusOK, msg)
 }
+
+type LoadCell struct {
+	ReadSample int `json:"read_sample"`
+}
+
+type ChangeSample struct {
+	Id       string   `json:"id"`
+	LoadCell LoadCell `json:"loadcell"`
+}
+
+func (d *DeviceController) ChangeSample(c echo.Context) error {
+	timeStr := c.QueryParam("time")
+	device := c.QueryParam("device")
+	timeInt, err := strconv.Atoi(timeStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, err.Error())
+	}
+	topic := fmt.Sprintf("ibme/app/config/update/%s", device)
+	//fmt.Println(topic)
+	msg := ChangeSample{
+		Id: device,
+		LoadCell: LoadCell{
+			ReadSample: timeInt,
+		},
+	}
+	mqtt2.Publish(d.Mqtt, msg, topic)
+	return c.JSON(http.StatusOK, msg)
+}
+
 func (d *DeviceController) CheckOnline(c echo.Context) error {
 	topicSub := "ibme/server/online/list"
 	topicPub := "ibme/web/online/list"
