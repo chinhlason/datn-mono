@@ -33,7 +33,7 @@ func UserRoute(e *echo.Echo, q *execute.Queries) {
 	e.POST("/reset-psw", controller.ResetPsw)
 
 	c.GET("/get-all-doctors", controller.GetAllUsers, middleware.IsADMIN)
-	c.GET("/get", controller.GetUerById, middleware.IsADMIN)
+	c.GET("/get", controller.GetUerById)
 	c.PUT("/update", controller.UpdateProfile)
 	c.PUT("/change-password", controller.ChangePasswordUser)
 	c.PUT("/change-permission", controller.ChangePermission, middleware.IsADMIN)
