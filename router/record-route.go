@@ -27,4 +27,5 @@ func RecordRoute(e *echo.Echo, q *execute.Queries) {
 	c.GET("/search-pending", controller.SearchPendingRecord)
 	c.GET("/statistical", controller.Statistical)
 	c.PUT("/leave", controller.LeaveHospital)
+	//c.PUT("/update", controller.LeaveHospital)
 }
