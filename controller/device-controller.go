@@ -182,28 +182,25 @@ func (d *DeviceController) OnOffDevice(c echo.Context) error {
 }
 
 type LoadCell struct {
-	ReadSample int `json:"read_sample"`
+	ReadSample int `json:"sync_period"`
 }
 
 type ChangeSample struct {
-	Id       string   `json:"id"`
-	LoadCell LoadCell `json:"loadcell"`
+	ReadSample int `json:"sync_period"`
 }
 
 func (d *DeviceController) ChangeSample(c echo.Context) error {
 	timeStr := c.QueryParam("time")
 	device := c.QueryParam("device")
 	timeInt, err := strconv.Atoi(timeStr)
+	timeIntMil := timeInt * 1000
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, err.Error())
 	}
-	topic := fmt.Sprintf("ibme/app/config/update/%s", device)
+	topic := fmt.Sprintf("ibme/device/config/update/%s", device)
 	//fmt.Println(topic)
 	msg := ChangeSample{
-		Id: device,
-		LoadCell: LoadCell{
-			ReadSample: timeInt,
-		},
+		ReadSample: timeIntMil,
 	}
 	mqtt2.Publish(d.Mqtt, msg, topic)
 	return c.JSON(http.StatusOK, msg)
